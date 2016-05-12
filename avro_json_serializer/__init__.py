@@ -107,18 +107,26 @@ class AvroJsonSerializer(object):
         :param datum: Data to serialize
         :return: dict {"type": value} or "null"
         """
-        for candiate_schema in schema.schemas:
-            if validate(candiate_schema, datum):
-                if candiate_schema.type == "null":
-                    return self._serialize_null()
-                else:
-                    field_type_name = candiate_schema.type
-                    if isinstance(candiate_schema, avro.schema.NamedSchema):
-                        field_type_name = candiate_schema.name
-                    return {
-                        field_type_name: self._serialize_data(candiate_schema, datum)
-                    }
-        raise schema.AvroTypeException(schema, datum)
+        def find_schema():
+            from avro.io import GenericRecord
+            if isinstance(datum, GenericRecord):
+                if datum.schema not in schema.schemas:
+                    raise AvroTypeException(schema, datum)
+                return datum.schema
+            for candiate_schema in schema.schemas:
+                if validate(candiate_schema, datum):
+                    return candiate_schema
+            raise AvroTypeException(schema, datum)
+        candiate_schema = find_schema()
+        if candiate_schema.type == "null":
+            return self._serialize_null()
+        else:
+            field_type_name = candiate_schema.type
+            if isinstance(candiate_schema, avro.schema.NamedSchema):
+                field_type_name = candiate_schema.fullname
+            return {
+                field_type_name: self._serialize_data(candiate_schema, datum)
+            }
 
     def _serialize_record(self, schema, datum):
         """
